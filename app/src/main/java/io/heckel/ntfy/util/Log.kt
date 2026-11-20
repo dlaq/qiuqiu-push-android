@@ -144,10 +144,8 @@ class Log(private val logsDao: LogDao) {
         )
         private var instance: Log? = null
 
-        fun d(tag: String, message: String, exception: Throwable? = null) {
-            if (exception == null) android.util.Log.d(tag, message) else android.util.Log.d(tag, message, exception)
-            getInstance()?.log(android.util.Log.DEBUG, tag, message, exception)
-        }
+        // Keep payloads and credentials out of logcat, including Debug builds.
+        fun d(tag: String, message: String, exception: Throwable? = null) {}
 
         fun i(tag: String, message: String, exception: Throwable? = null) {
             if (exception == null) android.util.Log.i(tag, message) else android.util.Log.i(tag, message, exception)

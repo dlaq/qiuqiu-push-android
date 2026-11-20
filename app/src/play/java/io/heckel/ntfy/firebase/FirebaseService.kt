@@ -60,29 +60,27 @@ class FirebaseService : FirebaseMessagingService() {
             ApiService.EVENT_MESSAGE_CLEAR -> handleMessageClear(remoteMessage)
             ApiService.EVENT_KEEPALIVE -> handleKeepalive(remoteMessage)
             ApiService.EVENT_POLL_REQUEST -> handlePollRequest(remoteMessage)
-            else -> Log.d(TAG, "Discarding unexpected message (2): from=${remoteMessage.from}, data=${data}")
+            else -> Log.d(TAG, "Discarding unexpected message (2): from=${remoteMessage.from}")
         }
     }
 
     private fun handleKeepalive(remoteMessage: RemoteMessage) {
-        Log.d(TAG, "Keepalive received, sending auto restart broadcast for foregrounds service")
-        sendBroadcast(Intent(this, SubscriberService.AutoRestartReceiver::class.java)) // Restart it if necessary!
-        val topic = remoteMessage.data["topic"]
-        if (topic != ApiService.CONTROL_TOPIC) {
-            Log.d(TAG, "Keepalive on non-control topic $topic received, subscribing to control topic ${ApiService.CONTROL_TOPIC}")
-            messenger.subscribe(ApiService.CONTROL_TOPIC)
-        }
+        // QiuQiu never uses silent FCM as a periodic keepalive trigger.
     }
 
     private fun handlePollRequest(remoteMessage: RemoteMessage) {
-        val baseUrl = getString(R.string.app_base_url) // Everything from Firebase comes from main service URL!
+        val baseUrl = io.heckel.ntfy.qiuqiu.QiuQiuConfig.server(this@FirebaseService) // Everything from Firebase comes from main service URL!
         val topic = remoteMessage.data["topic"] ?: return
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
         val workName = "${PollWorker.WORK_NAME_ONCE_SINGE_PREFIX}_${baseUrl}_${topic}"
         val workManager = WorkManager.getInstance(this)
-        val workRequest = OneTimeWorkRequest.Builder(PollWorker::class.java)
+        val requestBuilder = OneTimeWorkRequest.Builder(PollWorker::class.java)
+        if (android.os.Build.VERSION.SDK_INT >= 31 && remoteMessage.priority == RemoteMessage.PRIORITY_HIGH) {
+            requestBuilder.setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+        }
+        val workRequest = requestBuilder
             .setInputData(workDataOf(
                 PollWorker.INPUT_DATA_BASE_URL to baseUrl,
                 PollWorker.INPUT_DATA_TOPIC to topic
@@ -91,7 +89,7 @@ class FirebaseService : FirebaseMessagingService() {
             .build()
         Log.d(TAG, "Poll request for ${topicShortUrl(baseUrl, topic)} received, scheduling unique poll worker with name $workName")
 
-        workManager.enqueueUniqueWork(workName, ExistingWorkPolicy.REPLACE, workRequest)
+        workManager.enqueueUniqueWork(workName, ExistingWorkPolicy.APPEND_OR_REPLACE, workRequest)
     }
 
     private fun handleMessageDelete(remoteMessage: RemoteMessage) {
@@ -102,7 +100,7 @@ class FirebaseService : FirebaseMessagingService() {
         Log.d(TAG, "Received message_delete: from=${remoteMessage.from}, id=$id, topic=$topic, sequenceId=$sequenceId")
 
         CoroutineScope(job).launch {
-            val baseUrl = getString(R.string.app_base_url)
+            val baseUrl = io.heckel.ntfy.qiuqiu.QiuQiuConfig.server(this@FirebaseService)
             val subscription = repository.getSubscription(baseUrl, topic) ?: return@launch
 
             // Mark all notifications with this sequenceId as deleted
@@ -126,7 +124,7 @@ class FirebaseService : FirebaseMessagingService() {
         Log.d(TAG, "Received message_clear: from=${remoteMessage.from}, id=$id, topic=$topic, sequenceId=$sequenceId")
 
         CoroutineScope(job).launch {
-            val baseUrl = getString(R.string.app_base_url)
+            val baseUrl = io.heckel.ntfy.qiuqiu.QiuQiuConfig.server(this@FirebaseService)
             val subscription = repository.getSubscription(baseUrl, topic) ?: return@launch
 
             // Mark all notifications with this sequenceId as read
@@ -164,18 +162,18 @@ class FirebaseService : FirebaseMessagingService() {
         val sequenceId = data["sequence_id"]
         val truncated = (data["truncated"] ?: "") == "1"
         if (id == null || topic == null || message == null || timestamp == null) {
-            Log.d(TAG, "Discarding unexpected message: from=${remoteMessage.from}, fcmprio=${remoteMessage.priority}, fcmprio_orig=${remoteMessage.originalPriority}, data=${data}")
+            Log.d(TAG, "Discarding unexpected message: from=${remoteMessage.from}, fcmprio=${remoteMessage.priority}, fcmprio_orig=${remoteMessage.originalPriority}")
             return
         }
-        Log.d(TAG, "Received message: from=${remoteMessage.from}, fcmprio=${remoteMessage.priority}, fcmprio_orig=${remoteMessage.originalPriority}, data=${data}")
+        Log.d(TAG, "Received message: from=${remoteMessage.from}, fcmprio=${remoteMessage.priority}, fcmprio_orig=${remoteMessage.originalPriority}")
 
         CoroutineScope(job).launch {
-            val baseUrl = getString(R.string.app_base_url) // Everything from Firebase comes from main service URL!
+            val baseUrl = io.heckel.ntfy.qiuqiu.QiuQiuConfig.server(this@FirebaseService) // Everything from Firebase comes from main service URL!
 
             // Check if notification was truncated and discard if it will (or likely already did) arrive via instant delivery
             val subscription = repository.getSubscription(baseUrl, topic) ?: return@launch
             if (truncated && subscription.instant) {
-                Log.d(TAG, "Discarding truncated message that did/will arrive via instant delivery: from=${remoteMessage.from}, fcmprio=${remoteMessage.priority}, fcmprio_orig=${remoteMessage.originalPriority}, data=${data}")
+                Log.d(TAG, "Discarding truncated message that did/will arrive via instant delivery: from=${remoteMessage.from}, fcmprio=${remoteMessage.priority}, fcmprio_orig=${remoteMessage.originalPriority}")
                 return@launch
             }
 
@@ -208,12 +206,13 @@ class FirebaseService : FirebaseMessagingService() {
                 attachment = attachment,
                 notificationId = deriveNotificationId(baseUrl, topic, actualSequenceId),
                 deleted = false,
+                qiuqiu = data["qiuqiu"],
                 event = ApiService.EVENT_MESSAGE
             )
 
             val added = repository.addNotification(notification)
             if (added) {
-                Log.d(TAG, "Dispatching notification: from=${remoteMessage.from}, fcmprio=${remoteMessage.priority}, fcmprio_orig=${remoteMessage.originalPriority}, data=${data}")
+                Log.d(TAG, "Dispatching notification: from=${remoteMessage.from}, fcmprio=${remoteMessage.priority}, fcmprio_orig=${remoteMessage.originalPriority}")
                 dispatcher.dispatch(subscription, notification)
             }
         }
@@ -222,7 +221,7 @@ class FirebaseService : FirebaseMessagingService() {
     override fun onNewToken(token: String) {
         // Called if the FCM registration token is updated
         // We don't actually use or care about the token, since we're using topics
-        Log.d(TAG, "Registration token was updated: $token")
+        Log.d(TAG, "Registration token was updated")
     }
 
     override fun onDestroy() {

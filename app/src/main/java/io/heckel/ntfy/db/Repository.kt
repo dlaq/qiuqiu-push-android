@@ -135,7 +135,13 @@ class Repository(private val sharedPrefs: SharedPreferences, database: Database)
     @Suppress("RedundantSuspendModifier")
     @WorkerThread
     suspend fun addNotification(notification: Notification): Boolean {
-        val maybeExistingNotification = notificationDao.get(notification.id)
+        val previous=notificationDao.getBySequence(notification.subscriptionId,notification.sequenceId)
+        val qiuqiuId=io.heckel.ntfy.qiuqiu.QiuQiuChannels.meta(notification,"message_id")
+        if (qiuqiuId != null && previous != null && qiuqiuId==io.heckel.ntfy.qiuqiu.QiuQiuChannels.meta(previous,"message_id")) {
+ subscriptionDao.updateLastNotificationId(notification.subscriptionId, notification.id)
+ return false
+}
+val maybeExistingNotification = notificationDao.get(notification.id)
         if (maybeExistingNotification != null || notification.event != ApiService.EVENT_MESSAGE) {
             return false
         }
@@ -198,7 +204,10 @@ class Repository(private val sharedPrefs: SharedPreferences, database: Database)
     }
 
     suspend fun getUsers(): List<User> {
-        return userDao.list()
+        return userDao.list().map {
+            if (!it.password.startsWith("qqenc1:")) userDao.update(it.copy(password=io.heckel.ntfy.qiuqiu.SecretBox.encrypt(it.password)))
+            it.copy(password = io.heckel.ntfy.qiuqiu.SecretBox.decrypt(it.password))
+        }
     }
 
     fun getUsersLiveData(): LiveData<List<User>> {
@@ -206,15 +215,18 @@ class Repository(private val sharedPrefs: SharedPreferences, database: Database)
     }
 
     suspend fun addUser(user: User) {
-        userDao.insert(user)
+        userDao.insert(user.copy(password = io.heckel.ntfy.qiuqiu.SecretBox.encrypt(user.password)))
     }
 
     suspend fun updateUser(user: User) {
-        userDao.update(user)
+        userDao.update(user.copy(password = io.heckel.ntfy.qiuqiu.SecretBox.encrypt(user.password)))
     }
 
     suspend fun getUser(baseUrl: String): User? {
-        return userDao.get(baseUrl)
+        return userDao.get(baseUrl)?.let {
+            if (!it.password.startsWith("qqenc1:")) userDao.update(it.copy(password=io.heckel.ntfy.qiuqiu.SecretBox.encrypt(it.password)))
+            it.copy(password = io.heckel.ntfy.qiuqiu.SecretBox.decrypt(it.password))
+        }
     }
 
     suspend fun deleteUser(baseUrl: String) {

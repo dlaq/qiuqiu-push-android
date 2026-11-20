@@ -371,15 +371,13 @@ class MainActivity : AppCompatActivity(), AddFragment.SubscribeListener, Notific
         dispatcher?.init()
 
         // Subscribe to control Firebase channel (so we can re-start the foreground service if it dies)
-        messenger.subscribe(ApiService.CONTROL_TOPIC)
+        messenger.unsubscribe(ApiService.CONTROL_TOPIC)
 
         // Darrkkkk mode
         AppCompatDelegate.setDefaultNightMode(repository.getDarkMode())
 
         // Background things
-        schedulePeriodicPollWorker()
-        schedulePeriodicServiceRestartWorker()
-        schedulePeriodicDeleteWorker()
+        io.heckel.ntfy.qiuqiu.QiuQiuConfig.cancelLegacyWork(this)
 
         // Permissions
         maybeRequestNotificationPermission()
@@ -466,63 +464,11 @@ class MainActivity : AppCompatActivity(), AddFragment.SubscribeListener, Notific
         networkCallback = null
     }
 
-    private fun schedulePeriodicPollWorker() {
-        val workerVersion = repository.getPollWorkerVersion()
-        val workPolicy = if (workerVersion == PollWorker.VERSION) {
-            Log.d(TAG, "Poll worker version matches: choosing KEEP as existing work policy")
-            ExistingPeriodicWorkPolicy.KEEP
-        } else {
-            Log.d(TAG, "Poll worker version DOES NOT MATCH: choosing REPLACE as existing work policy")
-            repository.setPollWorkerVersion(PollWorker.VERSION)
-            ExistingPeriodicWorkPolicy.REPLACE
-        }
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .build()
-        val work = PeriodicWorkRequestBuilder<PollWorker>(POLL_WORKER_INTERVAL_MINUTES, TimeUnit.MINUTES)
-            .setConstraints(constraints)
-            .addTag(PollWorker.TAG)
-            .addTag(PollWorker.WORK_NAME_PERIODIC_ALL)
-            .build()
-        Log.d(TAG, "Poll worker: Scheduling period work every $POLL_WORKER_INTERVAL_MINUTES minutes")
-        workManager!!.enqueueUniquePeriodicWork(PollWorker.WORK_NAME_PERIODIC_ALL, workPolicy, work)
-    }
 
-    private fun schedulePeriodicDeleteWorker() {
-        val workerVersion = repository.getDeleteWorkerVersion()
-        val workPolicy = if (workerVersion == DeleteWorker.VERSION) {
-            Log.d(TAG, "Delete worker version matches: choosing KEEP as existing work policy")
-            ExistingPeriodicWorkPolicy.KEEP
-        } else {
-            Log.d(TAG, "Delete worker version DOES NOT MATCH: choosing REPLACE as existing work policy")
-            repository.setDeleteWorkerVersion(DeleteWorker.VERSION)
-            ExistingPeriodicWorkPolicy.REPLACE
-        }
-        val work = PeriodicWorkRequestBuilder<DeleteWorker>(DELETE_WORKER_INTERVAL_MINUTES, TimeUnit.MINUTES)
-            .addTag(DeleteWorker.TAG)
-            .addTag(DeleteWorker.WORK_NAME_PERIODIC_ALL)
-            .build()
-        Log.d(TAG, "Delete worker: Scheduling period work every $DELETE_WORKER_INTERVAL_MINUTES minutes")
-        workManager!!.enqueueUniquePeriodicWork(DeleteWorker.WORK_NAME_PERIODIC_ALL, workPolicy, work)
-    }
 
-    private fun schedulePeriodicServiceRestartWorker() {
-        val workerVersion = repository.getAutoRestartWorkerVersion()
-        val workPolicy = if (workerVersion == SubscriberService.SERVICE_START_WORKER_VERSION) {
-            Log.d(TAG, "ServiceStartWorker version matches: choosing KEEP as existing work policy")
-            ExistingPeriodicWorkPolicy.KEEP
-        } else {
-            Log.d(TAG, "ServiceStartWorker version DOES NOT MATCH: choosing REPLACE as existing work policy")
-            repository.setAutoRestartWorkerVersion(SubscriberService.SERVICE_START_WORKER_VERSION)
-            ExistingPeriodicWorkPolicy.REPLACE
-        }
-        val work = PeriodicWorkRequestBuilder<SubscriberServiceManager.ServiceStartWorker>(SERVICE_START_WORKER_INTERVAL_MINUTES, TimeUnit.MINUTES)
-            .addTag(SubscriberService.TAG)
-            .addTag(SubscriberService.SERVICE_START_WORKER_WORK_NAME_PERIODIC)
-            .build()
-        Log.d(TAG, "ServiceStartWorker: Scheduling period work every $SERVICE_START_WORKER_INTERVAL_MINUTES minutes")
-        workManager?.enqueueUniquePeriodicWork(SubscriberService.SERVICE_START_WORKER_WORK_NAME_PERIODIC, workPolicy, work)
-    }
+
+
+
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.menu_main_action_bar, menu)

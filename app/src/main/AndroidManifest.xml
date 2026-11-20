@@ -3,16 +3,11 @@
 
     <!-- Permissions -->
     <uses-permission android:name="android.permission.INTERNET"/>
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/> <!-- To check network availability before showing connection alerts -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/> <!-- For instant delivery foregrounds service -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/> <!-- For instant delivery foregrounds service on SDK >= 34 -->
-    <uses-permission android:name="android.permission.WAKE_LOCK"/> <!-- To keep foreground service awake; soon not needed anymore -->
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/> <!-- To restart service on reboot -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/> <!-- To check network availability before showing connection alerts --> <!-- For instant delivery foregrounds service --> <!-- For instant delivery foregrounds service on SDK >= 34 -->
+    <uses-permission android:name="android.permission.WAKE_LOCK"/> <!-- To keep foreground service awake; soon not needed anymore --> <!-- To restart service on reboot -->
     <uses-permission android:name="android.permission.VIBRATE"/> <!-- Incoming notifications should be able to vibrate the phone -->
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28"/> <!-- Only required on SDK <= 28 -->
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/> <!-- To reschedule the websocket retry -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/> <!-- As of Android 13, we need to ask for permission to post notifications -->
-    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/> <!-- Allows to ignore battery optimization without going to the settings -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28"/> <!-- Only required on SDK <= 28 --> <!-- To reschedule the websocket retry -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/> <!-- As of Android 13, we need to ask for permission to post notifications --> <!-- Allows to ignore battery optimization without going to the settings -->
 
     <!-- UnifiedPush "raise to foreground" requirement, see https://unifiedpush.org/developers/spec/android/#service-to-raise-to-the-foreground -->
     <queries>
@@ -24,30 +19,30 @@
     <!-- Application -->
     <application
             android:name=".app.Application"
-            android:allowBackup="true"
+            android:allowBackup="false"
             android:icon="@mipmap/ic_launcher"
             android:label="@string/app_name"
             android:roundIcon="@mipmap/ic_launcher"
             android:supportsRtl="true"
-            android:theme="@style/AppTheme"
+            android:theme="@style/QiuQiuTheme"
             android:networkSecurityConfig="@xml/network_security_config"
             android:localeConfig="@xml/locales_config"
-            android:usesCleartextTraffic="true">
+            android:usesCleartextTraffic="false">
 
         <!-- Main activity -->
-        <activity
-                android:name=".ui.MainActivity"
-                android:exported="true">
+        <activity android:name=".qiuqiu.QiuQiuActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
 
+        <activity android:name=".ui.MainActivity" android:exported="false"/>
+        <activity android:name=".qiuqiu.LinkActivity" android:exported="false"/>
         <!-- Detail activity -->
         <activity
                 android:name=".ui.DetailActivity"
-                android:parentActivityName=".ui.MainActivity"
+                android:parentActivityName=".qiuqiu.QiuQiuActivity"
                 android:windowSoftInputMode="adjustResize"
                 android:exported="true">
             <meta-data
@@ -66,7 +61,7 @@
         <!-- Settings activity -->
         <activity
                 android:name=".ui.SettingsActivity"
-                android:parentActivityName=".ui.MainActivity">
+                android:parentActivityName=".qiuqiu.QiuQiuActivity">
             <meta-data
                     android:name="android.support.PARENT_ACTIVITY"
                     android:value=".ui.MainActivity"/>
@@ -108,7 +103,7 @@
 
         <!-- Subscriber foreground service for hosts other than ntfy.sh -->
         <service
-            android:name=".service.SubscriberService"
+            android:name=".service.SubscriberService" android:enabled="false"
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
@@ -118,7 +113,7 @@
         <!-- Subscriber service restart on reboot -->
         <receiver
                 android:name=".service.SubscriberService$BootStartReceiver"
-                android:enabled="true"
+                android:enabled="false"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED"/>
@@ -129,13 +124,13 @@
         <!-- Subscriber service restart on destruction -->
         <receiver
                 android:name=".service.SubscriberService$AutoRestartReceiver"
-                android:enabled="true"
+                android:enabled="false"
                 android:exported="false"/>
 
         <!-- Broadcast receiver for connection alert notification actions (swipe-dismiss, snooze, never) -->
         <receiver
                 android:name=".service.SubscriberService$ConnectionAlertBroadcastReceiver"
-                android:enabled="true"
+                android:enabled="false"
                 android:exported="false">
             <intent-filter>
                 <action android:name="io.heckel.ntfy.CONNECTION_ALERT_DISMISS"/>
@@ -148,7 +143,7 @@
         <!-- Broadcast receiver to send messages via intents -->
         <receiver
                 android:name=".msg.BroadcastService$BroadcastReceiver"
-                android:enabled="true"
+                android:enabled="false"
                 android:exported="true">
             <intent-filter>
                 <action android:name="io.heckel.ntfy.SEND_MESSAGE"/>
@@ -158,7 +153,7 @@
         <!-- Broadcast receiver for UnifiedPush; must match https://github.com/UnifiedPush/UP-spec/blob/main/specifications.md -->
         <receiver
                 android:name=".up.BroadcastReceiver"
-                android:enabled="true"
+                android:enabled="false"
                 android:exported="true">
             <intent-filter>
                 <action android:name="org.unifiedpush.android.distributor.REGISTER"/>
@@ -194,7 +189,7 @@
                 android:value="false"/>
         <meta-data
                 android:name="com.google.firebase.messaging.default_notification_icon"
-                android:resource="@drawable/ic_notification"/>
+                android:resource="@drawable/ic_qiuqiu"/>
 
         <!-- FileProvider required for older Android versions (<= P), to allow passing the file URI in the open intent.
              Avoids "exposed beyond app through Intent.getData" exception, see see https://stackoverflow.com/a/57288352/1440785 -->

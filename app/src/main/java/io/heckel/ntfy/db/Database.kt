@@ -160,6 +160,7 @@ data class Notification(
     @ColumnInfo(name = "actions") val actions: List<Action>?,
     @Embedded(prefix = "attachment_") val attachment: Attachment?,
     @ColumnInfo(name = "deleted") val deleted: Boolean,
+    @ColumnInfo(name = "qiuqiu") val qiuqiu: String? = null,
     @Ignore val event: String = ApiService.EVENT_MESSAGE, // In-memory event type (message, message_delete, message_clear)
 ) {
     constructor(
@@ -178,10 +179,11 @@ data class Notification(
         icon: Icon?,
         actions: List<Action>?,
         attachment: Attachment?,
-        deleted: Boolean
+        deleted: Boolean,
+        qiuqiu: String?
     ) : this(
         id, subscriptionId, timestamp, sequenceId, title, message, contentType, encoding,
-        notificationId, priority, tags, click, icon, actions, attachment, deleted, event = ApiService.EVENT_MESSAGE
+        notificationId, priority, tags, click, icon, actions, attachment, deleted, qiuqiu, event = ApiService.EVENT_MESSAGE
     )
 }
 
@@ -299,7 +301,7 @@ data class LogEntry(
 }
 
 @androidx.room.Database(
-    version = 18,
+    version = 19,
     entities = [
         Subscription::class,
         Notification::class,
@@ -345,14 +347,17 @@ abstract class Database : RoomDatabase() {
                     .addMigrations(MIGRATION_15_16)
                     .addMigrations(MIGRATION_16_17)
                     .addMigrations(MIGRATION_17_18)
-                    .fallbackToDestructiveMigration(true)
+                    .addMigrations(MIGRATION_18_19)
                     .build()
                 this.instance = instance
                 instance
             }
         }
 
-        private val MIGRATION_1_2 = object : Migration(1, 2) {
+        private val MIGRATION_18_19 = object : Migration(18, 19) {
+ override fun migrate(db: SupportSQLiteDatabase) { db.execSQL("ALTER TABLE Notification ADD COLUMN qiuqiu TEXT") }
+}
+private val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 // Drop "notifications" & "lastActive" columns (SQLite does not support dropping columns, ...)
                 db.execSQL("CREATE TABLE Subscription_New (id INTEGER NOT NULL, baseUrl TEXT NOT NULL, topic TEXT NOT NULL, instant INTEGER NOT NULL DEFAULT('0'), PRIMARY KEY(id))")
@@ -584,6 +589,9 @@ interface SubscriptionDao {
 
 @Dao
 interface NotificationDao {
+ @Query("SELECT * FROM notification WHERE subscriptionId=:subscriptionId AND sequenceId=:seq ORDER BY timestamp DESC,rowid DESC LIMIT 1")
+ fun getBySequence(subscriptionId:Long, seq:String): Notification?
+
     @Query("SELECT * FROM notification")
     suspend fun list(): List<Notification>
 

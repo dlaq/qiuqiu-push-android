@@ -73,6 +73,7 @@ class NotificationParser {
             attachment = attachment,
             notificationId = deriveNotificationId(baseUrl, topic, sequenceId),
             deleted = false,
+            qiuqiu = message.qiuqiu?.toString(),
             event = message.event
         )
         return NotificationWithTopic(topic, notification)

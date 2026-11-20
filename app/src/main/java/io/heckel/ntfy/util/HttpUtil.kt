@@ -75,7 +75,8 @@ object HttpUtil {
             .url(url)
             .addHeader("User-Agent", USER_AGENT)
         if (user != null) {
-            builder.addHeader("Authorization", Credentials.basic(user.username, user.password, UTF_8))
+            if (user.username == "token") builder.addHeader("Authorization", "Bearer " + user.password)
+            else builder.addHeader("Authorization", Credentials.basic(user.username, user.password, UTF_8))
         }
         customHeaders.forEach { header ->
             builder.addHeader(header.name, header.value)
@@ -91,7 +92,7 @@ object HttpUtil {
 
     private suspend fun defaultClientBuilder(context: Context, baseUrl: String): OkHttpClient.Builder {
         return emptyClientBuilder(context, baseUrl)
-            .callTimeout(1, TimeUnit.MINUTES) // Increased to 1min (from 15s) to reduce client variance
+            .callTimeout(20, TimeUnit.SECONDS) // Increased to 1min (from 15s) to reduce client variance
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
             .writeTimeout(15, TimeUnit.SECONDS)

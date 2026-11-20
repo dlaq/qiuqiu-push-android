@@ -35,21 +35,24 @@ class PollWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, 
                 val subscription = repository.getSubscription(baseUrl, topic) ?: return@withContext Result.success()
                 listOf(subscription)
             } else {
-                repository.getSubscriptions()
+                return@withContext Result.failure()
             }
 
+            var failed = false
             subscriptions.forEach{ subscription ->
                 try {
-                    val newNotifications = poller.poll(subscription)
+                    val newNotifications = kotlinx.coroutines.withTimeout(25000) { poller.poll(subscription) }
                     newNotifications.forEach { notification ->
                         dispatcher.dispatch(subscription, notification)
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed checking messages: ${e.message}", e)
+                    if (e is kotlinx.coroutines.CancellationException && e !is kotlinx.coroutines.TimeoutCancellationException) throw e
+                    failed = true
+                    Log.e(TAG, "Event-triggered message retrieval failed")
                 }
             }
             Log.d(TAG, "Finished polling for new notifications")
-            return@withContext Result.success()
+            return@withContext if (failed && runAttemptCount < 2) Result.retry() else if(failed) Result.failure() else Result.success()
         }
     }
 

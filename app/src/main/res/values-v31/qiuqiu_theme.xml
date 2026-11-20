@@ -1,0 +1,1 @@
+<resources><style name="QiuQiuTheme" parent="AppTheme"><item name="android:windowSplashScreenAnimatedIcon">@drawable/qiuqiu_foreground</item><item name="android:windowSplashScreenBackground">@color/qiuqiu_background</item><item name="android:windowLightStatusBar">true</item><item name="android:navigationBarColor">@color/qiuqiu_background</item></style></resources>

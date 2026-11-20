@@ -13,12 +13,12 @@ android {
     compileSdkVersion 36
 
     defaultConfig {
-        applicationId "io.heckel.ntfy"
+        applicationId "io.qiuqiu.push"
         minSdkVersion 26
         targetSdkVersion 36
 
-        versionCode 63
-        versionName "1.25.2"
+        versionCode 20000
+        versionName "2.0.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
@@ -32,8 +32,20 @@ android {
         }
     }
 
+    signingConfigs {
+        qiuqiuRelease {
+            def keyPath=System.getenv('QQ_KEYSTORE_FILE')
+            if(keyPath) {
+                storeFile=file(keyPath)
+                keyAlias=System.getenv('QQ_KEY_ALIAS') ?: 'qiuqiu'
+                storePassword=new File(System.getenv('QQ_STORE_PASSWORD_FILE')).text.trim()
+                keyPassword=new File(System.getenv('QQ_KEY_PASSWORD_FILE')).text.trim()
+            }
+        }
+    }
     buildTypes {
         release {
+            if(System.getenv("QQ_KEYSTORE_FILE")) signingConfig signingConfigs.qiuqiuRelease
             minifyEnabled false
             shrinkResources false
             debuggable false
@@ -83,10 +95,19 @@ android {
 android.applicationVariants.all { variant ->
     def shouldProcessGoogleServices = variant.flavorName == "play"
     def googleTask = tasks.named("process${variant.name.capitalize()}GoogleServices").get()
-    googleTask.enabled = shouldProcessGoogleServices
+    def hasFirebase=file("google-services.json").exists() || file("src/play/google-services.json").exists() || file("src/${variant.name}/google-services.json").exists()
+    googleTask.enabled=shouldProcessGoogleServices && hasFirebase
+    if(shouldProcessGoogleServices && variant.buildType.name=='release' && !hasFirebase) {
+        tasks.named("pre${variant.name.capitalize()}Build").configure {
+            doFirst { if(!project.hasProperty('qiuqiuAllowUnconfiguredFirebase')) throw new GradleException('Provide your own Firebase google-services.json; use -PqiuqiuAllowUnconfiguredFirebase only for an explicitly setup-required build.') }
+        }
+    }
 }
 
 dependencies {
+    testImplementation "junit:junit:4.13.2"
+    androidTestImplementation "androidx.test:runner:1.7.0"
+    androidTestImplementation "androidx.test.ext:junit:1.3.0"
     // AndroidX, The Basics
     implementation "androidx.appcompat:appcompat:1.7.1"
     implementation "androidx.core:core-ktx:1.18.0"

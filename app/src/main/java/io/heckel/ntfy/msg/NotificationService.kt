@@ -84,16 +84,16 @@ class NotificationService(val context: Context) {
     private fun displayInternal(subscription: Subscription, notification: Notification, update: Boolean = false) {
         val title = formatTitle(appBaseUrl, subscription, notification)
         val groupId = if (subscription.dedicatedChannels) subscriptionGroupId(subscription) else DEFAULT_GROUP
-        val channelId = toChannelId(groupId, notification.priority)
-        val insistent = notification.priority == PRIORITY_MAX &&
-                (repository.getInsistentMaxPriorityEnabled() || subscription.insistent == Repository.INSISTENT_MAX_PRIORITY_ENABLED)
+        val channelId = io.heckel.ntfy.qiuqiu.QiuQiuChannels.channel(context, notification)
+        val insistent = false
         val builder = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(R.drawable.ic_notification)
+            .setSmallIcon(io.heckel.ntfy.qiuqiu.QiuQiuChannels.icon(notification))
             .setColor(Colors.notificationIcon(context))
             .setContentTitle(title)
             .setWhen(notification.timestamp * 1000) // Set timestamp (convert seconds to millis)
             .setShowWhen(true)
             .setOnlyAlertOnce(true) // Do not vibrate or play sound if already showing (updates!)
+            .setGroup(io.heckel.ntfy.qiuqiu.QiuQiuChannels.meta(notification,"group")?.takeIf { it.isNotEmpty() } ?: "qiuqiu.${subscription.id}")
             .setAutoCancel(true) // Cancel when notification is clicked
         setStyleAndText(builder, subscription, notification) // Preview picture or big text style
         setClickAction(builder, subscription, notification)
@@ -184,15 +184,17 @@ class NotificationService(val context: Context) {
     }
 
     private fun setClickAction(builder: NotificationCompat.Builder, subscription: Subscription, notification: Notification) {
+        val appIntent=PendingIntent.getActivity(context,notification.notificationId,Intent(context,io.heckel.ntfy.qiuqiu.QiuQiuActivity::class.java).putExtra("show_history",true).putExtra("focus_message",notification.id),PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         if (notification.click == "") {
-            builder.setContentIntent(detailActivityIntent(subscription))
+            builder.setContentIntent(appIntent)
         } else {
             try {
                 val uri = notification.click.toUri()
-                val viewIntent = PendingIntent.getActivity(context, Random().nextInt(), Intent(Intent.ACTION_VIEW, uri), PendingIntent.FLAG_IMMUTABLE)
+                val target=Intent(context,io.heckel.ntfy.qiuqiu.LinkActivity::class.java).putExtra("url",uri.toString()).putExtra("subscription_id",subscription.id)
+                val viewIntent=PendingIntent.getActivity(context,Random().nextInt(),target,PendingIntent.FLAG_IMMUTABLE)
                 builder.setContentIntent(viewIntent)
             } catch (_: Exception) {
-                builder.setContentIntent(detailActivityIntent(subscription))
+                builder.setContentIntent(appIntent)
             }
         }
     }
@@ -513,6 +515,10 @@ class NotificationService(val context: Context) {
     }
 
     private fun maybeMarkdown(message: String, notification: Notification): CharSequence {
+        if (io.heckel.ntfy.qiuqiu.QiuQiuChannels.meta(notification, "content_type") == "html") {
+            return android.text.Html.fromHtml(message, android.text.Html.FROM_HTML_MODE_COMPACT)
+        }
+
         if (notification.contentType == "text/markdown") {
             return markwon.toMarkdown(message)
         }
