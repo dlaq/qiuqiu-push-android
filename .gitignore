@@ -57,3 +57,12 @@ proguard-project.txt
 # Android Studio/IDEA
 *.iml
 .idea
+
+# QiuQiu secrets must never be committed
+*.jks
+*.keystore
+*adminsdk*.json
+secrets/
+.secrets/
+.env
+__pycache__/

@@ -1,0 +1,9 @@
+{
+  "repository": "https://github.com/binwiederhier/ntfy-android",
+  "tag": "v1.25.2",
+  "commit": "51730a0f06cebfad59f1b7bc0cb6d5c47082b032",
+  "initial_implementation_commit": "32437a5ae6f8b9902afabc9514f57543f28a82c2",
+  "fork": "https://github.com/dlaq/qiuqiu-push-android",
+  "product_branch": "main",
+  "upstream_snapshot_branch": "upstream-main"
+}
