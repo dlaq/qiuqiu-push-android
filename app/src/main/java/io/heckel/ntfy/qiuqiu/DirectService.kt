@@ -60,7 +60,7 @@ class DirectService:Service(){
                                     val repository=Repository.getInstance(this@DirectService)
                                     val sub=repository.getSubscriptions().find{it.topic==json.optString("topic")}?:return@launch
                                     val notification=NotificationParser().parse(text,sub.id,sub.baseUrl)?:return@launch
-                                    if(repository.addNotification(notification))NotificationDispatcher(this@DirectService,repository).dispatch(sub,notification)
+                                    if(repository.addNotification(notification,updatePollingCursor=false))NotificationDispatcher(this@DirectService,repository).dispatch(sub,notification)
                                     else Receipts.record(this@DirectService,notification,"received")
                                 }
                                 else->if(json.has("error")){ws.close(1008,"设备授权失败");ended.complete(Unit)}

@@ -118,7 +118,9 @@ class ApiService(private val context: Context) {
         val subscriptionId = subscription.id
         val baseUrl = subscription.baseUrl
         val topic = subscription.topic
-        val sinceVal = subscription.lastNotificationId ?: SINCE_ALL
+        // Direct transport IDs are local identities, never ntfy cache cursors.
+        // This also repairs a cursor written by an earlier direct-mode build.
+        val sinceVal = subscription.lastNotificationId?.takeUnless { it.startsWith("direct_") } ?: SINCE_ALL
         val url = topicUrlJsonPoll(baseUrl, topic, sinceVal)
         Log.d(TAG, "Polling topic $url")
 

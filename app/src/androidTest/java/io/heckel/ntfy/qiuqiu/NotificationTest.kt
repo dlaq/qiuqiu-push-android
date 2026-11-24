@@ -10,7 +10,7 @@ import io.heckel.ntfy.db.Notification
 import io.heckel.ntfy.db.Repository
 import io.heckel.ntfy.db.Subscription
 import io.heckel.ntfy.msg.NotificationService
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -51,6 +51,31 @@ class NotificationTest {
         val update=n.copy(id="dedup-three",qiuqiu="""{"message_id":"updated","business_type":"server"}""")
         assertTrue(repository.addNotification(update))
         repository.removeSubscription(sub)
+    }
+    @Test fun directAndFCMKeepSeparatePollingCursors()=runBlocking {
+        val repository=Repository.getInstance(ctx)
+        val sub=subscription().copy(id=987655,topic="cursor-test",lastNotificationId="oldNtfyID")
+        repository.addSubscription(sub)
+        try {
+            val direct=notification("direct_qq-test").copy(subscriptionId=sub.id)
+            assertTrue(repository.addNotification(direct,updatePollingCursor=false))
+            assertEquals("oldNtfyID",repository.getSubscriptions().single{it.id==sub.id}.lastNotificationId)
+            assertFalse(repository.addNotification(direct.copy(id="newNtfyID")))
+            assertEquals("newNtfyID",repository.getSubscriptions().single{it.id==sub.id}.lastNotificationId)
+            assertFalse(repository.addNotification(direct,updatePollingCursor=false))
+            assertEquals("newNtfyID",repository.getSubscriptions().single{it.id==sub.id}.lastNotificationId)
+        } finally {repository.removeSubscription(sub)}
+    }
+    @Test fun simultaneousTransportsStoreOnlyOneMessage()=runBlocking {
+        val repository=Repository.getInstance(ctx)
+        val sub=subscription().copy(id=987656,topic="concurrent-test")
+        repository.addSubscription(sub)
+        try {
+            val base=notification().copy(subscriptionId=sub.id)
+            val inserted=coroutineScope {(1..20).map{i->async(Dispatchers.IO){repository.addNotification(base.copy(id="direct_$i"),updatePollingCursor=false)}}.awaitAll()}
+            assertEquals(1,inserted.count{it})
+            assertEquals(1,repository.getNotifications().count{it.subscriptionId==sub.id})
+        } finally {repository.removeSubscription(sub)}
     }
     @Test fun safeLinksAndKeystoreWrapping(){
         assertTrue(QiuQiuChannels.allowedUrl(ctx,Uri.parse("https://example.com")))

@@ -12,13 +12,14 @@ import androidx.lifecycle.MediatorLiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.asLiveData
 import androidx.lifecycle.map
+import androidx.room.withTransaction
 import io.heckel.ntfy.msg.ApiService
 import io.heckel.ntfy.util.Log
 import io.heckel.ntfy.util.validUrl
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
-class Repository(private val sharedPrefs: SharedPreferences, database: Database) {
+class Repository(private val sharedPrefs: SharedPreferences, private val database: Database) {
     private val subscriptionDao = database.subscriptionDao()
     private val notificationDao = database.notificationDao()
     private val userDao = database.userDao()
@@ -134,24 +135,25 @@ class Repository(private val sharedPrefs: SharedPreferences, database: Database)
 
     @Suppress("RedundantSuspendModifier")
     @WorkerThread
-    suspend fun addNotification(notification: Notification): Boolean {
+    suspend fun addNotification(notification: Notification, updatePollingCursor: Boolean = true): Boolean = database.withTransaction {
         val previous=notificationDao.getBySequence(notification.subscriptionId,notification.sequenceId)
         val qiuqiuId=io.heckel.ntfy.qiuqiu.QiuQiuChannels.meta(notification,"message_id")
         if (qiuqiuId != null && previous != null && qiuqiuId==io.heckel.ntfy.qiuqiu.QiuQiuChannels.meta(previous,"message_id")) {
- subscriptionDao.updateLastNotificationId(notification.subscriptionId, notification.id)
- return false
-}
-val maybeExistingNotification = notificationDao.get(notification.id)
+            if (updatePollingCursor) subscriptionDao.updateLastNotificationId(notification.subscriptionId, notification.id)
+            return@withTransaction false
+        }
+        val maybeExistingNotification = notificationDao.get(notification.id)
         if (maybeExistingNotification != null || notification.event != ApiService.EVENT_MESSAGE) {
-            return false
+            if (updatePollingCursor && maybeExistingNotification != null) subscriptionDao.updateLastNotificationId(notification.subscriptionId, notification.id)
+            return@withTransaction false
         }
         // Mark old notifications with the same sequence ID as deleted (this is an update to an existing sequence)
         if (notification.sequenceId.isNotEmpty()) {
             notificationDao.markAsDeletedBySequenceId(notification.subscriptionId, notification.sequenceId)
         }
-        subscriptionDao.updateLastNotificationId(notification.subscriptionId, notification.id)
         notificationDao.add(notification)
-        return true
+        if (updatePollingCursor) subscriptionDao.updateLastNotificationId(notification.subscriptionId, notification.id)
+        true
     }
 
     fun updateNotification(notification: Notification) {
