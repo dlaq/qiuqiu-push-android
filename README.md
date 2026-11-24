@@ -2,7 +2,7 @@
 
 [服务端与 Web 后台](https://github.com/dlaq/qiuqiu-push-server) · [上游升级流程](UPSTREAM_UPGRADE.md) · [真机验收](docs/device-acceptance.md)
 
-本仓库 Fork 自 **binwiederhier/ntfy-android**。`main` 是球球推送客户端，保留 ntfy 上游历史，使用 Kotlin / Play flavor / 自有 Firebase FCM。后台推送仅由 FCM 事件触发；禁用周期同步、前台订阅服务和保活。
+本仓库 Fork 自 **binwiederhier/ntfy-android**。`main` 是球球推送客户端，保留ntfy上游历史，使用Kotlin、Play flavor和自有Firebase FCM。2.1默认FCM省电接收，另提供用户开启的后台直连/自动模式和真实接收回执；直连模式显示常驻通知。完整操作和兼容边界见[2.1升级说明](https://github.com/dlaq/qiuqiu-push-server/blob/main/qiuqiu/docs/upgrade-2.1.md)。
 
 ## 构建
 
@@ -13,7 +13,7 @@ JDK 17、Android SDK 36、Build Tools 36.0.0，使用仓库内 Gradle Wrapper 9.
 3. 执行：
 
 ```sh
-./gradlew :app:assemblePlayRelease :app:testPlayDebugUnitTest :app:lintPlayRelease
+./gradlew :app:assemblePlayRelease :app:testFdroidDebugUnitTest :app:lintPlayRelease
 python3 scripts/check-background-policy.py
 ```
 
@@ -23,7 +23,7 @@ python3 scripts/check-background-policy.py
 
 APP 的服务器页填写自己的 HTTPS `push` 域名，用后台一次性配对码绑定。每台设备独立读取凭证，凭证由 Android Keystore 加密。通知业务支持服务器、安全、邮件、任务、网络及自定义图标/声音；尊重系统通知渠道设置。
 
-本地编译、Lint、单元测试、Android 35 模拟器的通知/渠道/去重/Keystore 测试、Room v18→v19 保留消息迁移已通过。自己的 Firebase、OPPO Find N5 / ColorOS 16、24h 低功耗和流体云尚待真实验收。
+2.1已通过Release构建、Lint及JVM单元测试，通知测试APK已生成。2.0曾完成Android35模拟器通知/渠道/去重/Keystore及Room v18→v19测试；该历史结果不能替代2.1通知和直连的运行验收。真实FCM、OPPO Find N5 / ColorOS、24h低功耗和流体云仍需验收。
 
 ![球球推送首页](docs/android-home.png)
 

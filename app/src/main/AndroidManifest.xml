@@ -3,6 +3,8 @@
 
     <!-- Permissions -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/> <!-- To check network availability before showing connection alerts --> <!-- For instant delivery foregrounds service --> <!-- For instant delivery foregrounds service on SDK >= 34 -->
     <uses-permission android:name="android.permission.WAKE_LOCK"/> <!-- To keep foreground service awake; soon not needed anymore --> <!-- To restart service on reboot -->
     <uses-permission android:name="android.permission.VIBRATE"/> <!-- Incoming notifications should be able to vibrate the phone -->
@@ -30,6 +32,9 @@
             android:usesCleartextTraffic="false">
 
         <!-- Main activity -->
+        <service android:name=".qiuqiu.DirectService" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User enabled persistent connection for receiving self hosted push messages without Google messaging services."/>
+        </service>
         <activity android:name=".qiuqiu.QiuQiuActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
@@ -147,6 +152,13 @@
                 android:exported="true">
             <intent-filter>
                 <action android:name="io.heckel.ntfy.SEND_MESSAGE"/>
+            </intent-filter>
+        </receiver>
+
+        <receiver android:name=".qiuqiu.DirectBootReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
             </intent-filter>
         </receiver>
 

@@ -18,7 +18,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
-import com.google.firebase.FirebaseApp
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import io.heckel.ntfy.R
@@ -59,6 +58,8 @@ class QiuQiuActivity:AppCompatActivity() {
         super.onCreate(state)
         if(intent.getBooleanExtra("show_history",false))page="通知"
         QiuQiuChannels.ensureDefaults(this)
+        Receipts.flush(this)
+        if(prefs.getString("receive_mode","fcm")!="fcm")androidx.core.content.ContextCompat.startForegroundService(this,Intent(this,DirectService::class.java))
         if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS),12)
         render()
         intent.getStringExtra("focus_message")?.let { id ->
@@ -89,12 +90,12 @@ class QiuQiuActivity:AppCompatActivity() {
         val hero=card("每一条重要消息，都有自己的声音。")
         hero.background=rounded(Color.rgb(253,234,241))
         hero.addView(text("FCM 按需唤醒 · 独立业务通知",15f,muted))
-        val firebaseReady=FirebaseApp.getApps(this).isNotEmpty()
+        val firebaseReady=FirebaseStatus.ready(this)
         val notifications=getSystemService(NotificationManager::class.java).areNotificationsEnabled()
         val state=card("接收状态")
         state.addView(text("Firebase：${if(firebaseReady)"已配置" else "未配置，需要使用自己的 google-services.json 构建"}",15f))
         state.addView(text("通知权限：${if(notifications)"已允许" else "未允许"}",15f))
-        state.addView(text("设备：${prefs.getString("device_id",null)?:"尚未配对"}",14f,muted))
+        state.addView(text("设备：${prefs.getString("device_name",null)?:prefs.getString("device_id",null)?.takeLast(6)?:"尚未配对"}",14f,muted))
         state.addView(text("服务器：${prefs.getString("ntfy_url",null)?:"尚未设置"}",14f,muted))
         button(state,"打开通知权限设置"){startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,packageName))}
         button(state,"管理服务器与设备配对"){page="服务器";render()}
@@ -105,6 +106,18 @@ class QiuQiuActivity:AppCompatActivity() {
         val c=card("连接你的服务器")
         val url=input(c,"https://push.你的域名",value=prefs.getString("push_url","")?:"")
         button(c,"保存并测试连接"){task {val base=validBase(url.text.toString());withContext(Dispatchers.IO){val req=Request.Builder().url("$base/healthz").build();http.newCall(req).execute().use {if(!it.isSuccessful)throw IllegalStateException("服务器连接失败")}};prefs.edit().putString("push_url",base).apply()}}
+        val modes=listOf("fcm","direct","auto")
+        val modeCard=card("消息接收模式")
+        modeCard.addView(text("FCM：省电按需唤醒。后台直连：常驻通知、心跳和重连。自动：直连优先，FCM备用。直连会增加后台网络与功耗。",14f,muted))
+        val selector=Spinner(this).apply{adapter=ArrayAdapter(this@QiuQiuActivity,android.R.layout.simple_spinner_dropdown_item,listOf("FCM 省电","后台直连","自动选择"));setSelection(modes.indexOf(prefs.getString("receive_mode","fcm")).coerceAtLeast(0))};modeCard.addView(selector)
+        modeCard.addView(text("直连状态：${prefs.getString("direct_state","未连接")}",14f,muted))
+        button(modeCard,"应用接收模式"){task{
+            val selected=modes[selector.selectedItemPosition]
+            withContext(Dispatchers.IO){val base=validBase(prefs.getString("push_url","")?:"");val key=Receipts.credential(this@QiuQiuActivity,http);val body=JsonObject().apply{addProperty("mode",selected);addProperty("app_version",BuildConfig.VERSION_NAME)};val req=Request.Builder().url("$base/api/v1/device/profile").header("Authorization","Bearer $key").post(body.toString().toRequestBody("application/json".toMediaType())).build();http.newCall(req).execute().use{if(!it.isSuccessful)throw IllegalStateException("接收模式保存失败")}}
+            prefs.edit().putString("receive_mode",selected).apply()
+            val subs=withContext(Dispatchers.IO){repository.getSubscriptions()};for(sub in subs){if(selected=="direct")FirebaseMessenger().unsubscribe(sub.topic) else FirebaseMessenger().subscribe(sub.topic)}
+            stopService(Intent(this,DirectService::class.java));if(selected!="fcm")androidx.core.content.ContextCompat.startForegroundService(this,Intent(this,DirectService::class.java));render()
+        }}
         val pair=card("一次性设备配对")
         pair.addView(text("在管理后台生成配对码；配对后设备仅能读取自己的私有收件箱。",14f,muted))
         val code=input(pair,"配对码",true);val deviceName=input(pair,"设备名称",value=Build.MODEL)
@@ -113,7 +126,7 @@ class QiuQiuActivity:AppCompatActivity() {
             val result=api("pair/claim","POST",JsonObject().apply {addProperty("code",code.text.toString().trim());addProperty("name",deviceName.text.toString())},false)
             val ntfy=validBase(result.get("ntfy_url").asString);val topic=result.get("topic").asString
             withContext(Dispatchers.IO){repository.addUser(User(ntfy,"token",result.get("ntfy_token").asString));repository.addSubscription(Subscription(id=randomSubscriptionId(),baseUrl=ntfy,topic=topic,instant=false,mutedUntil=0,minPriority=Repository.MIN_PRIORITY_USE_GLOBAL,autoDelete=Repository.AUTO_DELETE_USE_GLOBAL,insistent=0,lastNotificationId=null,icon=null,upAppId=null,upConnectorToken=null,displayName="我的消息",dedicatedChannels=false));repository.setDefaultBaseUrl(ntfy)}
-            prefs.edit().putString("ntfy_url",ntfy).putString("device_id",result.get("device_id").asString).putString("uid",result.get("user_id").asString).apply()
+            prefs.edit().putString("ntfy_url",ntfy).putString("device_id",result.get("device_id").asString).putString("device_name",deviceName.text.toString()).putString("device_api_token",SecretBox.encrypt(result.get("device_token").asString)).putString("uid",result.get("user_id").asString).apply()
             FirebaseMessenger().subscribe(topic);code.setText("");Toast.makeText(this,"已绑定设备，请从后台发送测试通知",Toast.LENGTH_LONG).show()
         }}
         accountLogin()
@@ -141,6 +154,7 @@ class QiuQiuActivity:AppCompatActivity() {
         lifecycleScope.launch {val all=withContext(Dispatchers.IO){repository.getNotifications().filterNot{it.deleted}.sortedByDescending{it.timestamp}.take(200)};if(all.isEmpty())c.addView(text("还没有消息。",15f,muted));for(n in all){c.addView(text(n.title.ifEmpty{"无标题消息"},17f,ink,true));c.addView(text(android.text.Html.fromHtml(n.message,android.text.Html.FROM_HTML_MODE_COMPACT).toString().take(250),15f));c.addView(text(DateFormat.getDateTimeInstance().format(Date(n.timestamp*1000)),13f,muted));button(c,"查看详情"){showMessage(n)}}}
     }
     private fun showMessage(n:Notification){
+        Receipts.record(this,n,"opened")
         val content=LinearLayout(this).apply {orientation=LinearLayout.VERTICAL;setPadding(dp(20),dp(12),dp(20),dp(12));addView(text(if(QiuQiuChannels.meta(n,"content_type")=="html")android.text.Html.fromHtml(n.message,android.text.Html.FROM_HTML_MODE_COMPACT).toString() else n.message,16f))}
         if(n.contentType=="text/markdown"||QiuQiuChannels.meta(n,"content_type")=="markdown"){
  val messageView=content.getChildAt(0) as TextView;io.noties.markwon.Markwon.create(this).setMarkdown(messageView,n.message)

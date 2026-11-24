@@ -23,6 +23,7 @@ class NotificationDispatcher(val context: Context, val repository: Repository) {
     }
 
     fun dispatch(subscription: Subscription, notification: Notification) {
+        if(notification.event==ApiService.EVENT_MESSAGE)io.heckel.ntfy.qiuqiu.Receipts.record(context,notification,"received")
         Log.d(TAG, "Dispatching $notification for subscription $subscription")
 
         val cancel = shouldCancel(notification)
@@ -36,6 +37,8 @@ class NotificationDispatcher(val context: Context, val repository: Repository) {
             notifier.cancel(notification.notificationId)
         } else if (notify) {
             notifier.display(subscription, notification)
+        } else if(notification.event==ApiService.EVENT_MESSAGE) {
+            io.heckel.ntfy.qiuqiu.Receipts.record(context,notification,"notification_suppressed",if(muted)"设备或订阅已静音" else "低于最低优先级或消息详情已打开")
         }
         if (broadcast) {
             broadcaster.sendMessage(subscription, notification, muted)

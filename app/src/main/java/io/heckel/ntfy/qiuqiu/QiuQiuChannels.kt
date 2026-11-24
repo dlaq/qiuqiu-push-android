@@ -11,6 +11,11 @@ import io.heckel.ntfy.R
 import io.heckel.ntfy.db.Notification
 
 object QiuQiuChannels {
+    fun largeIcon(context:Context,n:Notification):android.graphics.Bitmap? {
+        val drawable=androidx.core.content.ContextCompat.getDrawable(context,icon(n))?:return null
+        val bitmap=android.graphics.Bitmap.createBitmap(128,128,android.graphics.Bitmap.Config.ARGB_8888)
+        val canvas=android.graphics.Canvas(bitmap);canvas.drawColor(android.graphics.Color.rgb(253,234,241));drawable.setBounds(24,24,104,104);drawable.setTint(android.graphics.Color.rgb(181,60,108));drawable.draw(canvas);return bitmap
+    }
     val businesses=linkedMapOf("server" to "服务器","security" to "安全","email" to "邮件","task" to "任务","network" to "网络","custom" to "自定义")
     val baseIds=mapOf("server" to "server_alert","security" to "security_alert","email" to "email_notice","task" to "task_complete","network" to "network_alert","custom" to "custom_notice")
     fun meta(n:Notification,key:String):String? = try { n.qiuqiu?.let { JsonParser.parseString(it).asJsonObject.get(key)?.asString } }catch(_:Exception){null}

@@ -6,7 +6,7 @@ root=Path(__file__).resolve().parents[1]/'app/src'
 manifest=ET.parse(root/'main/AndroidManifest.xml').getroot()
 a='{http://schemas.android.com/apk/res/android}'
 permissions={n.get(a+'name') for n in manifest.findall('uses-permission')}
-assert 'android.permission.FOREGROUND_SERVICE' not in permissions
+assert 'android.permission.FOREGROUND_SERVICE' in permissions
 assert 'android.permission.SCHEDULE_EXACT_ALARM' not in permissions
 app=manifest.find('application')
 for tag in ['service','receiver']:
@@ -19,4 +19,7 @@ assert 'startForegroundService(' not in manager and 'enqueueUniqueWork(' not in 
 service=(root/'play/java/io/heckel/ntfy/firebase/FirebaseService.kt').read_text()
 keepalive=service.split('private fun handleKeepalive',1)[1].split('private fun handlePollRequest',1)[0]
 assert 'sendBroadcast(' not in keepalive
-print('Static background policy passed: no periodic enqueue, no subscriber startup, no foreground/exact-alarm permissions')
+direct=(root/'main/java/io/heckel/ntfy/qiuqiu/DirectService.kt').read_text()
+assert 'if(mode=="fcm"){stopSelf();return START_NOT_STICKY}' in direct
+assert 'enqueueUniquePeriodicWork(' not in direct and 'WakeLock' not in direct
+print('Static background policy passed: FCM defaults to no foreground connection; optional user-enabled direct service; no periodic polling/exact alarms')

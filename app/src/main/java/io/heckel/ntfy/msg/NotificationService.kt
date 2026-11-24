@@ -87,7 +87,7 @@ class NotificationService(val context: Context) {
         val channelId = io.heckel.ntfy.qiuqiu.QiuQiuChannels.channel(context, notification)
         val insistent = false
         val builder = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(io.heckel.ntfy.qiuqiu.QiuQiuChannels.icon(notification))
+            .setSmallIcon(R.drawable.ic_qiuqiu)
             .setColor(Colors.notificationIcon(context))
             .setContentTitle(title)
             .setWhen(notification.timestamp * 1000) // Set timestamp (convert seconds to millis)
@@ -95,6 +95,7 @@ class NotificationService(val context: Context) {
             .setOnlyAlertOnce(true) // Do not vibrate or play sound if already showing (updates!)
             .setGroup(io.heckel.ntfy.qiuqiu.QiuQiuChannels.meta(notification,"group")?.takeIf { it.isNotEmpty() } ?: "qiuqiu.${subscription.id}")
             .setAutoCancel(true) // Cancel when notification is clicked
+        io.heckel.ntfy.qiuqiu.QiuQiuChannels.meta(notification,"business_name")?.takeIf{it.isNotBlank()}?.let{builder.setSubText(it)}
         setStyleAndText(builder, subscription, notification) // Preview picture or big text style
         setClickAction(builder, subscription, notification)
         maybeSetDeleteIntent(builder, insistent)
@@ -110,7 +111,12 @@ class NotificationService(val context: Context) {
         maybeCreateNotificationChannel(groupId, notification.priority)
         maybePlayInsistentSound(groupId, insistent)
 
-        notificationManager.notify(notification.notificationId, builder.build())
+        val blocked=!notificationManager.areNotificationsEnabled()||notificationManager.getNotificationChannel(channelId)?.importance==NotificationManager.IMPORTANCE_NONE
+        if(blocked){io.heckel.ntfy.qiuqiu.Receipts.record(context,notification,"notification_blocked","系统通知权限或渠道已关闭");return}
+        try {
+            notificationManager.notify(notification.notificationId, builder.build())
+            if(!update)io.heckel.ntfy.qiuqiu.Receipts.record(context,notification,"notification_submitted")
+        }catch(_:SecurityException){io.heckel.ntfy.qiuqiu.Receipts.record(context,notification,"notification_blocked","系统拒绝通知权限")}
     }
 
     private fun maybeSetDeleteIntent(builder: NotificationCompat.Builder, insistent: Boolean) {
@@ -138,7 +144,7 @@ class NotificationService(val context: Context) {
         val isSupportedImage = supportedImage(notification.attachment?.type)
         val subscriptionIcon = subscription.icon?.readBitmapFromUriOrNull(context)
         val notificationIcon = notification.icon?.contentUri?.readBitmapFromUriOrNull(context)
-        val largeIcon = notificationIcon ?: subscriptionIcon
+        val largeIcon = notificationIcon ?: subscriptionIcon ?: io.heckel.ntfy.qiuqiu.QiuQiuChannels.largeIcon(context,notification)
         if (contentUri != null && isSupportedImage) {
             try {
                 val attachmentBitmap = contentUri.readBitmapFromUri(context)
@@ -190,7 +196,7 @@ class NotificationService(val context: Context) {
         } else {
             try {
                 val uri = notification.click.toUri()
-                val target=Intent(context,io.heckel.ntfy.qiuqiu.LinkActivity::class.java).putExtra("url",uri.toString()).putExtra("subscription_id",subscription.id)
+                val target=Intent(context,io.heckel.ntfy.qiuqiu.LinkActivity::class.java).putExtra("url",uri.toString()).putExtra("subscription_id",subscription.id).putExtra("qiuqiu_message_id",io.heckel.ntfy.qiuqiu.QiuQiuChannels.meta(notification,"message_id"))
                 val viewIntent=PendingIntent.getActivity(context,Random().nextInt(),target,PendingIntent.FLAG_IMMUTABLE)
                 builder.setContentIntent(viewIntent)
             } catch (_: Exception) {

@@ -26,7 +26,8 @@ class NotificationTest {
         NotificationService(ctx).display(subscription(),n)
         val shown=manager.activeNotifications.firstOrNull {it.id==n.notificationId}
         assertNotNull(shown)
-        assertEquals(R.drawable.ic_server,shown!!.notification.smallIcon.resId)
+        assertEquals(R.drawable.ic_qiuqiu,shown!!.notification.smallIcon.resId)
+        assertNotNull(shown.notification.getLargeIcon())
         val channel=manager.getNotificationChannel(shown.notification.channelId)
         assertTrue(channel.sound.toString().contains("/${R.raw.qiuqiu_alarm}"))
         assertEquals(NotificationManager.IMPORTANCE_HIGH,channel.importance)
