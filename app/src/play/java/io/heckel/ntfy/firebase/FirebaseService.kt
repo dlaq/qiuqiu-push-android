@@ -71,6 +71,7 @@ class FirebaseService : FirebaseMessagingService() {
     private fun handlePollRequest(remoteMessage: RemoteMessage) {
         val baseUrl = io.heckel.ntfy.qiuqiu.QiuQiuConfig.server(this@FirebaseService) // Everything from Firebase comes from main service URL!
         val topic = remoteMessage.data["topic"] ?: return
+        io.heckel.ntfy.qiuqiu.Receipts.flush(this)
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
@@ -214,6 +215,8 @@ class FirebaseService : FirebaseMessagingService() {
             if (added) {
                 Log.d(TAG, "Dispatching notification: from=${remoteMessage.from}, fcmprio=${remoteMessage.priority}, fcmprio_orig=${remoteMessage.originalPriority}")
                 dispatcher.dispatch(subscription, notification)
+            } else {
+                io.heckel.ntfy.qiuqiu.Receipts.record(this@FirebaseService,notification,"received")
             }
         }
     }

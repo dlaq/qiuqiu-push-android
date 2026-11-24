@@ -27,6 +27,10 @@ class ApiService(private val context: Context) {
     private val gson = Gson()
     private val parser = NotificationParser()
 
+    fun acknowledgeStoredNotification(notification: Notification) {
+        io.heckel.ntfy.qiuqiu.Receipts.record(context,notification,"received")
+    }
+
     suspend fun publish(
         baseUrl: String,
         topic: String,

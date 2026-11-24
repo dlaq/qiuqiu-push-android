@@ -63,7 +63,10 @@ class Poller(
             .filter { it.event == ApiService.EVENT_MESSAGE }
         val addedNotifications = mutableListOf<Notification>()
         notificationsToAdd.forEach { notification ->
-            if (repository.addNotification(notification)) {
+            val added=repository.addNotification(notification)
+            // Both a new insert and an existing duplicate prove local storage.
+            api.acknowledgeStoredNotification(notification)
+            if (added) {
                 addedNotifications.add(notification)
             }
         }
